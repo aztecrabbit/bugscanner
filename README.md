@@ -15,14 +15,14 @@ Install
 
     $ git clone https://github.com/aztecrabbit/bugscanner
     $ cd bugscanner
-    $ python3 -m pip install -r requiremets.txt --user
-    $ python3 setup.py install --user
+    $ python3 -m pip install -r requirements.txt
+    $ python3 setup.py install
 
 
 Usage
 -----
 
-**subdomain scanner or finder**
+**Subdomain Scanner or Finder**
 
     $ subfinder -d bug.com -o bug.com.txt
 
@@ -31,7 +31,7 @@ or
     $ findomain -o -t bug.com
 
 
-**run**
+**Bug Scanner**
 
     $ bugscanner bug.com.txt
 

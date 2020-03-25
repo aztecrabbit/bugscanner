@@ -5,13 +5,13 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
 	name="bugscanner",
-	version="0.0.1",
+	version="0.0.2",
 	author="aztecrabbit",
-	author_email="aztecrabbit@yandex.com",
-	description="bug scanner for internet freedom (domain fronting, server name indication, etc)",
+	author_email="ars.xda@gmail.com",
+	description="Bug Scanner for Internet Freedom (Domain Fronting, Server Name Indication, Etc)",
 	long_description=long_description,
 	long_description_content_type="text/markdown",
-	url="https://github.com/aztecrabbit/bugscan",
+	url="https://github.com/aztecrabbit/bugscanner",
 	packages=setuptools.find_packages(),
 	classifiers=[
 		"Programming Language :: Python :: 3",

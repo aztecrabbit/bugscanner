@@ -24,7 +24,7 @@ Usage
 
 **Subdomain Scanner or Finder**
 
-    $ subfinder -d bug.com -o bug.com.txt
+    $ ~/go/bin/subfinder -d bug.com -o bug.com.txt
 
 or
 

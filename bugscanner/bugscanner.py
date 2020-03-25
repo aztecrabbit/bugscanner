@@ -10,39 +10,57 @@ import threading
 
 lock = threading.RLock()
 
+def log(value: str):
+	print("\033[K" + value + "\033[0m")
+
+def log_replace(value: str):
+	sys.stdout.write(value + "\r")
+	sys.stdout.flush()
+
+def get_data_list(data: list, index: int, default: str = "") -> str:
+	try:
+		return data[index]
+	except IndexError:
+		return default
+
 class Resolver:
+	mode: str
 	threads: int
 	hostnames: list
-	queue_hostnames: object
+	server_name_indication_scanned: list = []
 
-	def print_result(
-			self, host: str, code: str, server: str, sni: str, hostname: str, color: str = ""):
-		print(f"\033[K{color}{host:<15}  {code:<4}  {server:<18}  {sni:<4}  {hostname}\033[0m")
-
-	def get_response(self, host: str) -> list:
-		data = {
-			"status_code": "",
-			"server": "",
+	def add_data(self, host: str, hostname: str, status_code: str = "", server: str = "", sni: str = ""):
+		return {
+			"host": host,
+			"hostname": hostname,
+			"status_code": status_code,
+			"server": server,
+			"sni": sni,
 		}
-		if self.mode != "brainfuck":
-			return data
-		while True:
-			try:
-				response = requests.head(f"http://{host}", timeout=10)
-			except requests.exceptions.ConnectionError:
-				return data
-			except requests.exceptions.ReadTimeout:
-				return data
-			else:
-				data["status_code"] = response.status_code
-				data["server"] = response.headers.get("server", "")
-				break
 
-		return data
+	def print_data_list(self, data_list: list):
+		with lock:
+			color = ""
+			for data in data_list:
+				if self.mode == "brainfuck":
+					if data["server"] in ["AkamaiGHost", "Varnish"]:
+						color = "\033[32;1m" # Green
+					log(color + f"{data['host']:<15}  {data['status_code']:<4}  {data['server']:<20}  {data['hostname']}")
+				elif self.mode in ["https", "ssl", "sni"]:
+					if data["sni"] == "True":
+						color = "\033[32;1m" # Green
+					log(color + f"{data['host']:<15}  {data['sni']:<4}  {data['hostname']}")
 
-	def sni_scan(self, server_name_indication) -> str:
-		if self.mode != "https":
+	def scan_server_name_indication(self, hostname: str):
+		if self.mode not in ["https", "ssl", "sni"]:
 			return ""
+
+		with lock:
+			server_name_indication = ".".join(hostname.split(".")[-3:])
+			if server_name_indication in self.server_name_indication_scanned:
+				return ""
+			self.server_name_indication_scanned.append(server_name_indication)
+
 		try:
 			socket_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 			socket_client.settimeout(5)
@@ -50,110 +68,83 @@ class Resolver:
 			socket_client = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2).wrap_socket(
 				socket_client, server_hostname=server_name_indication, do_handshake_on_connect=True
 			)
-			# print(f"Certificate:\n\n{ssl.DER_cert_to_PEM_cert(socket_client.getpeercert(True))}")
 		except:
 			return "--"
 		else:
 			return "True"
 
-	def add_result(self, host, code, server, sni, hostname):
-		return {
-			"host": host,
-			"response": {
-				"status_code": code,
-				"server": server,
-			},
-			"sni": sni,
-			"hostname": hostname,
-		}
+	def get_http_response(self, host: str) -> (str, str):
+		if self.mode != "brainfuck":
+			return "", ""
+
+		while True:
+			try:
+				response = requests.head(f"http://{host}", timeout=10)
+			except requests.exceptions.ConnectionError:
+				return "", ""
+			except requests.exceptions.ReadTimeout:
+				return "", ""
+			else:
+				return response.status_code, response.headers.get("server", "")
 
 	def resolve(self, hostname: str):
-		sys.stdout.write("\033[K" + hostname + "\r")
-		sys.stdout.flush()
-
 		try:
-			response = socket.gethostbyname_ex(hostname)
+			log_replace(hostname)
+			name, aliaslist, addresslist = socket.gethostbyname_ex(hostname)
 		except socket.gaierror:
 			return
 
-		data = {}
-		data["hostname"] = response[0]
-		data["aliases_host"] = response[2]
-		data["aliases_hostname"] = response[1]
-		data["response"] = self.get_response(data["aliases_host"][-1])
+		for i in range(len(aliaslist)):
+			alias_hostname = aliaslist[i]
+			alias_host = get_data_list(addresslist, i, addresslist[-1])
+			yield alias_host, alias_hostname
 
-		results = []
-		index = 0
+		yield addresslist[-1], name
 
-		for alias_host, alias_hostname in zip(data["aliases_host"], data["aliases_hostname"]):
-			index += 1
-			data["sni"] = ""
-			if index > 1 or alias_hostname.startswith("www."):
-				data["sni"] = self.sni_scan(alias_hostname)
-			results.append(self.add_result(
-				alias_host,
-				data["response"]["status_code"],
-				data["response"]["server"],
-				data["sni"],
-				alias_hostname,
-			))
-
-		data["sni"] = ""
-		if len(data["aliases_hostname"]) or data["hostname"].startswith("www."):
-			data["sni"] = self.sni_scan(data["hostname"])
-		results.append(self.add_result(
-			data["aliases_host"][-1],
-			data["response"]["status_code"],
-			data["response"]["server"],
-			data["sni"],
-			data["hostname"],
-		))
-
-		with lock:
-			for data in results:
-				color = ""
-				if data["response"]["server"] in ["AkamaiGHost", "Varnish"]:
-					color = "\033[32;1m"
-				self.print_result(
-					data["host"],
-					data["response"]["status_code"],
-					data["response"]["server"],
-					data["sni"],
-					data["hostname"],
-					color
-				)
-	
 	def run(self):
 		while True:
-			self.resolve(self.queue_hostnames.get())
-			self.queue_hostnames.task_done()
+			data_list = []
+			last_host = ""
+			status_code, server = "", ""
+			for host, hostname in self.resolve(self.queue_hostname.get()):
+				if host != last_host:
+					last_host = host
+					status_code, server = self.get_http_response(host)
+				if not host and not status_code and not server:
+					continue
+				sni = self.scan_server_name_indication(hostname)
+				data_list.append(self.add_data(host, hostname, status_code, server, sni))
+			self.print_data_list(data_list)
+			self.queue_hostname.task_done()
 
 	def start(self):
-		self.queue_hostnames = queue.Queue()
+		self.queue_hostname = queue.Queue()
 		for hostname in self.hostnames:
-			self.queue_hostnames.put(hostname)
+			self.queue_hostname.put(hostname)
 
-		self.print_result("host", "code", "server", "sni", "hostname")
-		self.print_result("----", "----", "------", "---", "--------")
-		
-		for _ in range(min(self.threads, self.queue_hostnames.qsize())):
+		self.print_data_list([
+			self.add_data("host", "hostname", "code", "server", "sni"),
+			self.add_data("----", "--------", "----", "------", "---"),
+		])
+
+		for _ in range(min(self.threads, self.queue_hostname.qsize())):
 			thread = threading.Thread(target=self.run, args=())
 			thread.daemon = True
 			thread.start()
 
-		self.queue_hostnames.join()
+		self.queue_hostname.join()
 
 def main():
 	parser = argparse.ArgumentParser(
 		formatter_class=lambda prog: argparse.HelpFormatter(prog, max_help_position=52))
 	parser.add_argument("filename", help="hostnames file", type=str)
-	parser.add_argument("-m", "--mode", help="brainfuck (default), http, https",
+	parser.add_argument("-m", "--mode", help="brainfuck (default), http, https, ssl, sni",
 		dest="mode", type=str, default="brainfuck")
 	parser.add_argument("-t", "--threads", help="threads", dest="threads", type=int, default=8)
 
 	args = parser.parse_args()
 	args.threads = 8 if not args.threads else args.threads
-	if args.mode not in ["brainfuck", "direct", "http", "https"]:
+	if args.mode not in ["brainfuck", "http", "https", "ssl", "sni"]:
 		parser.print_help()
 		sys.exit()
 

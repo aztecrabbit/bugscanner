@@ -3,15 +3,20 @@
 Bug Scanner for Internet Freedom
 
 
-Subdomain Scanner or Finder
----------------------------
+Sub Finder
+----------
 
 - [subfinder](https://github.com/projectdiscovery/subfinder) (golang)
-- [findomain](https://github.com/Edu4rdSHL/findomain) (rust)
 
 
 Install
 -------
+
+**Sub Finder**
+
+    $ go get -v -u github.com/projectdiscovery/subfinder/cmd/subfinder
+
+**Bug Scanner**
 
     $ git clone https://github.com/aztecrabbit/bugscanner
     $ cd bugscanner
@@ -22,14 +27,9 @@ Install
 Usage
 -----
 
-**Subdomain Scanner or Finder**
+**Sub Finder**
 
     $ ~/go/bin/subfinder -d bug.com -o bug.com.txt
-
-or
-
-    $ findomain -o -t bug.com
-
 
 **Bug Scanner**
 

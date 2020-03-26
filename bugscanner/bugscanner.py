@@ -11,10 +11,11 @@ import threading
 lock = threading.RLock()
 
 def log(value: str):
-	print("\033[K" + value + "\033[0m")
+	with lock:
+		print("\033[K" + value + "\033[0m")
 
 def log_replace(value: str):
-	sys.stdout.write(value + "\r")
+	sys.stdout.write("\033[K" + value + "\r")
 	sys.stdout.flush()
 
 def get_data_list(data: list, index: int, default: str = "") -> str:
@@ -27,6 +28,7 @@ class Resolver:
 	mode: str
 	threads: int
 	hostnames: list
+	hostname_deep: int
 	server_name_indication_scanned: list = []
 
 	def add_data(self, host: str, hostname: str, status_code: str = "", server: str = "", sni: str = ""):
@@ -40,8 +42,8 @@ class Resolver:
 
 	def print_data_list(self, data_list: list):
 		with lock:
-			color = ""
 			for data in data_list:
+				color = ""
 				if self.mode == "brainfuck":
 					if data["server"] in ["AkamaiGHost", "Varnish"]:
 						color = "\033[32;1m" # Green
@@ -56,14 +58,14 @@ class Resolver:
 			return ""
 
 		with lock:
-			server_name_indication = ".".join(hostname.split(".")[-3:])
+			server_name_indication = ".".join(hostname.split(".")[0 - self.hostname_deep:])
 			if server_name_indication in self.server_name_indication_scanned:
 				return ""
 			self.server_name_indication_scanned.append(server_name_indication)
 
 		try:
 			socket_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-			socket_client.settimeout(5)
+			socket_client.settimeout(10)
 			socket_client.connect(("httpbin.org", 443))
 			socket_client = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2).wrap_socket(
 				socket_client, server_hostname=server_name_indication, do_handshake_on_connect=True
@@ -140,6 +142,7 @@ def main():
 	parser.add_argument("filename", help="hostnames file", type=str)
 	parser.add_argument("-m", "--mode", help="brainfuck (default), http, https, ssl, sni",
 		dest="mode", type=str, default="brainfuck")
+	parser.add_argument("-d", "--deep", help="hostname deep for ssl mode", dest="hostname_deep", type=int, default=2)
 	parser.add_argument("-t", "--threads", help="threads", dest="threads", type=int, default=8)
 
 	args = parser.parse_args()
@@ -152,6 +155,7 @@ def main():
 	resolver.mode = args.mode
 	resolver.threads = args.threads
 	resolver.hostnames = open(args.filename).read().splitlines()
+	resolver.hostname_deep = args.hostname_deep if args.hostname_deep > 1 else 2
 	resolver.start()
 	
 if __name__ == "__main__":

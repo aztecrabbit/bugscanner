@@ -1,4 +1,5 @@
 # User
+*.old
 *.stackdump
 
 authorizations.txt

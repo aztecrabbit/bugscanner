@@ -18,6 +18,10 @@ Install
 
 **Bug Scanner**
 
+    $ python3 -m pip install bugscanner
+
+or
+
     $ git clone https://github.com/aztecrabbit/bugscanner
     $ cd bugscanner
     $ python3 -m pip install -r requirements.txt

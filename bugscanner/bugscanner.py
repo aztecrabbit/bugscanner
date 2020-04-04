@@ -33,8 +33,6 @@ class BugScanner:
 		"ssl": {},
 		"proxy": {},
 	}
-	direct_response_scanned = {}
-	http_proxy_response_scanned = {}
 
 	def print_result(self, host, hostname, status_code=None, server=None, sni=None, color=""):
 		if not color and (server in ["AkamaiGHost", "Varnish", "AmazonS3"] or sni == "True"):

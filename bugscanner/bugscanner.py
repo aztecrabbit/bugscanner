@@ -65,15 +65,15 @@ class BugScanner:
 
 		yield host_list[-1], cname
 
-	def get_direct_response(self, host, hostname, port):
+	def get_direct_response(self, method, host, hostname, port):
 		with lock:
 			if host in self.scanned["direct"]:
 				return self.scanned["direct"][host]
 
-		response = self.request("HEAD", hostname, port, timeout=5)
+		response = self.request(method.upper(), hostname, port, timeout=5)
 		if response is not None:
 			status_code = response.status_code
-			server = response.headers.get("server")
+			server = response.headers.get("server", "")
 		else:
 			status_code = ""
 			server = ""
@@ -84,8 +84,8 @@ class BugScanner:
 		}
 		return self.scanned["direct"][host]
 
-	def get_sni_response(self, hostname):
-		server_name_indication = ".".join(hostname.split(".")[0 - self.deep:])
+	def get_sni_response(self, hostname, deep):
+		server_name_indication = ".".join(hostname.split(".")[0 - deep:])
 		with lock:
 			if server_name_indication in self.scanned["ssl"]:
 				return self.scanned["ssl"][server_name_indication]
@@ -106,7 +106,7 @@ class BugScanner:
 			self.scanned["ssl"][server_name_indication] = response
 			return self.scanned["ssl"][server_name_indication]
 
-	def get_proxy_response(self, hostname):
+	def get_proxy_response(self, method, hostname, port):
 		with lock:
 			if hostname in self.scanned["proxy"]:
 				return self.scanned["proxy"][hostname]
@@ -115,7 +115,7 @@ class BugScanner:
 			"http": "http://" + self.proxy,
 			"https": "http://" + self.proxy,
 		}
-		response = self.request(self.method.upper(), hostname, self.port, proxies=proxies, allow_redirects=False, timeout=5)
+		response = self.request(method.upper(), hostname, port, proxies=proxies, allow_redirects=False, timeout=5)
 		if response is None:
 			return None
 
@@ -144,14 +144,14 @@ class BugScanner:
 		while True:
 			for host, hostname in self.resolve(self.queue_hostname.get()):
 				if self.mode == "direct":
-					response = self.get_direct_response(host, hostname, self.port)
+					response = self.get_direct_response(self.method, host, hostname, self.port)
 					self.print_result(host, hostname, status_code=response["status_code"], server=response["server"])
 
 				elif self.mode == "ssl":
-					self.print_result(host, hostname, sni=self.get_sni_response(hostname))
+					self.print_result(host, hostname, sni=self.get_sni_response(hostname, self.deep))
 
 				elif self.mode == "proxy":
-					response = self.get_proxy_response(hostname)
+					response = self.get_proxy_response(self.method, hostname, self.port)
 					self.print_proxy_response(response)
 
 			self.queue_hostname.task_done()

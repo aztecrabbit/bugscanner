@@ -66,6 +66,12 @@ Scan only when using the website quota you want to scan
     $ bugscanner bug.com.txt --mode proxy --proxy proxy.example.com:8080 --port 443
 
 
+Updating
+--------
+
+    $ python3 -m pip install --upgrade bugscanner
+
+
 Note
 ----
 

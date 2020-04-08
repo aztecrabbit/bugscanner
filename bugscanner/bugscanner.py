@@ -66,11 +66,10 @@ class BugScanner:
 		yield host_list[-1], cname
 
 	def get_direct_response(self, method, host, hostname, port):
-		with lock:
-			if host in self.scanned["direct"]:
-				return self.scanned["direct"][host]
+		if hostname in self.scanned["direct"]:
+			return None
 
-		response = self.request(method.upper(), hostname, port, timeout=5)
+		response = self.request(method.upper(), hostname, port, timeout=5, allow_redirects=False)
 		if response is not None:
 			status_code = response.status_code
 			server = response.headers.get("server", "")
@@ -78,17 +77,19 @@ class BugScanner:
 			status_code = ""
 			server = ""
 
-		self.scanned["direct"][host] = {
+		self.scanned["direct"][hostname] = {
 			"status_code": status_code,
 			"server": server,
 		}
-		return self.scanned["direct"][host]
+		return self.scanned["direct"][hostname]
 
 	def get_sni_response(self, hostname, deep):
 		server_name_indication = ".".join(hostname.split(".")[0 - deep:])
+		if server_name_indication in self.scanned["ssl"]:
+			return None
+		
 		with lock:
-			if server_name_indication in self.scanned["ssl"]:
-				return self.scanned["ssl"][server_name_indication]
+			self.scanned["ssl"][server_name_indication] = None
 
 		try:
 			log_replace(server_name_indication)
@@ -99,23 +100,24 @@ class BugScanner:
 				socket_client, server_hostname=server_name_indication, do_handshake_on_connect=True
 			)
 		except:
-			response = ""
+			response = {
+				"status": "",
+				"server_name_indication": server_name_indication,
+			}
 		else:
-			response = "True"
+			response = {
+					"status": "True",
+				"server_name_indication": server_name_indication,
+			}
 		finally:
 			self.scanned["ssl"][server_name_indication] = response
 			return self.scanned["ssl"][server_name_indication]
 
-	def get_proxy_response(self, method, hostname, port):
-		with lock:
-			if hostname in self.scanned["proxy"]:
-				return self.scanned["proxy"][hostname]
+	def get_proxy_response(self, method, hostname, port, proxy):
+		if hostname in self.scanned["proxy"]:
+			return None
 
-		proxies = {
-			"http": "http://" + self.proxy,
-			"https": "http://" + self.proxy,
-		}
-		response = self.request(method.upper(), hostname, port, proxies=proxies, allow_redirects=False, timeout=5)
+		response = self.request(method.upper(), hostname, port, proxies={"http": "http://" + proxy, "https": "http://" + proxy}, timeout=5, allow_redirects=False)
 		if response is None:
 			return None
 
@@ -145,14 +147,18 @@ class BugScanner:
 			for host, hostname in self.resolve(self.queue_hostname.get()):
 				if self.mode == "direct":
 					response = self.get_direct_response(self.method, host, hostname, self.port)
-					self.print_result(host, hostname, status_code=response["status_code"], server=response["server"])
+					if response is not None:
+						self.print_result(host, hostname, status_code=response["status_code"], server=response["server"])
 
 				elif self.mode == "ssl":
-					self.print_result(host, hostname, sni=self.get_sni_response(hostname, self.deep))
+					response = self.get_sni_response(hostname, self.deep)
+					if response is not None:
+						self.print_result(host, response["server_name_indication"], sni=response["status"])
 
 				elif self.mode == "proxy":
-					response = self.get_proxy_response(self.method, hostname, self.port)
-					self.print_proxy_response(response)
+					response = self.get_proxy_response(self.method, hostname, self.port, self.proxy)
+					if response is not None:
+						self.print_proxy_response(response)
 
 			self.queue_hostname.task_done()
 

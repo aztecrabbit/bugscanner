@@ -71,16 +71,11 @@ class BugScanner:
 	}
 
 	def print_result(self, host, hostname, port=None, status_code=None, server=None, sni=None, color=""):
-		if server in ["AkamaiGHost", "Varnish"]:
-			color = G2
-
-		if ((server == "AkamaiGHost" and status_code == 400) or
-				(server == "Varnish" and status_code == 500) or
-				(sni == "True")):
+		if server in ["AkamaiGHost", "AkamaiNetStorage", "Varnish"] or sni == "True":
 			color = G1
 			if self.mode == "direct":
 				whitelist_request = "*"
-				if server == "AkamaiGHost":
+				if server in ["AkamaiGHost", "AkamaiNetStorage"]:
 					whitelist_request = "akamai.net"
 				elif server == "Varnish":
 					whitelist_request = "fastly.net"
@@ -88,6 +83,11 @@ class BugScanner:
 					self.brainfuck_config["Inject"]["Rules"][f"{whitelist_request}:{port}"] = []
 
 				self.brainfuck_config["Inject"]["Rules"][f"{whitelist_request}:{port}"].append(f"{hostname}:{port}")
+
+		if ((server == "AkamaiGHost" and status_code != 400) or
+				(server == "Varnish" and status_code != 500) or
+				(server == "AkamaiNetStorage")):
+			color = G2
 
 		host = f"{host:<15}"
 		hostname = f"  {hostname}"
@@ -172,6 +172,10 @@ class BugScanner:
 		if response is None:
 			return None
 
+		if response.headers.get("location") == self.ignore_redirect_location:
+			log(f"{self.proxy} -> {self.method} {response.url} ({response.status_code})")
+			return None
+
 		self.scanned["proxy"][hostname] = {
 			"proxy": self.proxy,
 			"method": self.method,
@@ -232,10 +236,10 @@ class BugScanner:
 
 		self.queue_hostname.join()
 
-		if self.mode == "direct":
+		if self.mode == "direct" and len(self.brainfuck_config["Inject"]["Rules"]):
 			if os.name == "nt":
 				self.brainfuck_config["Psiphon"]["CoreName"] += ".exe"
-			with open(f"config.bugscanner.{datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}.json", 'w', encoding='utf-8') as f:
+			with open(f"config.{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}.json", 'w', encoding='utf-8') as f:
 				dump = json.dumps(self.brainfuck_config, indent=4, ensure_ascii=False)
 				data = re.sub('\n +', lambda match: '\n' + '\t' * int((len(match.group().strip('\n')) / 4)), dump)
 				f.write(data)
@@ -251,6 +255,7 @@ def main():
 
 	parser.add_argument("-P", "--proxy", help="proxy.example.com:8080", dest="proxy", type=str)
 	parser.add_argument("-M", "--method", help="http method", dest="method", type=str, default="HEAD")
+	parser.add_argument("-I", "--ignore-redirect-location", help="ignore redirect location for --mode proxy", dest="ignore_redirect_location", type=str, default="")
 
 	args = parser.parse_args()
 	if args.mode == "proxy" and not args.proxy:
@@ -262,8 +267,9 @@ def main():
 	bugscanner.deep = args.deep
 	bugscanner.port = args.port
 	bugscanner.proxy = args.proxy
-	bugscanner.method = args.method
+	bugscanner.method = args.method.upper()
 	bugscanner.threads = args.threads
+	bugscanner.ignore_redirect_location = args.ignore_redirect_location
 	bugscanner.start(open(args.filename).read().splitlines())
 
 if __name__ == "__main__":

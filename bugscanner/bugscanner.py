@@ -1,9 +1,12 @@
+import re
 import sys
 import ssl
 import time
+import json
 import queue
 import socket
 import argparse
+import datetime
 import requests
 import threading
 
@@ -28,15 +31,30 @@ def log_replace(value):
 	sys.stdout.flush()
 
 class BugScanner:
+	brainfuck_config = {
+		"Inject": {
+			"Rules": {}
+		}
+	}
 	scanned = {
 		"direct": {},
 		"ssl": {},
 		"proxy": {},
 	}
 
-	def print_result(self, host, hostname, status_code=None, server=None, sni=None, color=""):
-		if not color and (server in ["AkamaiGHost", "Varnish", "AmazonS3"] or sni == "True"):
+	def print_result(self, host, hostname, port=None, status_code=None, server=None, sni=None, color=""):
+		if not color and (server in ["AkamaiGHost", "Varnish"] or sni == "True"):
 			color = G1
+			if self.mode == "direct":
+				whitelist_request = "*"
+				if server == "AkamaiGHost":
+					whitelist_request = "akamai.net"
+				elif server == "Varnish":
+					whitelist_request = "fastly.net"
+				if f"{whitelist_request}:{port}" not in self.brainfuck_config["Inject"]["Rules"]:
+					self.brainfuck_config["Inject"]["Rules"][f"{whitelist_request}:{port}"] = []
+
+				self.brainfuck_config["Inject"]["Rules"][f"{whitelist_request}:{port}"].append(f"{hostname}:{port}")
 
 		host = f"{host:<15}"
 		hostname = f"  {hostname}"
@@ -106,7 +124,7 @@ class BugScanner:
 			}
 		else:
 			response = {
-					"status": "True",
+				"status": "True",
 				"server_name_indication": server_name_indication,
 			}
 		finally:
@@ -148,7 +166,7 @@ class BugScanner:
 				if self.mode == "direct":
 					response = self.get_direct_response(self.method, host, hostname, self.port)
 					if response is not None:
-						self.print_result(host, hostname, status_code=response["status_code"], server=response["server"])
+						self.print_result(host, hostname, port=self.port, status_code=response["status_code"], server=response["server"])
 
 				elif self.mode == "ssl":
 					response = self.get_sni_response(hostname, self.deep)
@@ -180,6 +198,12 @@ class BugScanner:
 			thread.start()
 
 		self.queue_hostname.join()
+
+		if self.mode == "direct":
+			with open(f"config.bugscanner.{datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}.json", 'w', encoding='utf-8') as f:
+				dump = json.dumps(self.brainfuck_config, indent=4, ensure_ascii=False)
+				data = re.sub('\n +', lambda match: '\n' + '\t' * int((len(match.group().strip('\n')) / 4)), dump)
+				f.write(data)
 
 def main():
 	parser = argparse.ArgumentParser(

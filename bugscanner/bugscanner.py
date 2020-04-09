@@ -12,6 +12,7 @@ import threading
 
 CN = "\033[K"
 G1 = "\033[32;1m"
+G2 = "\033[32;2m"
 CC = "\033[0m"
 
 lock = threading.RLock()
@@ -43,7 +44,12 @@ class BugScanner:
 	}
 
 	def print_result(self, host, hostname, port=None, status_code=None, server=None, sni=None, color=""):
-		if not color and (server in ["AkamaiGHost", "Varnish"] or sni == "True"):
+		if server in ["AkamaiGHost", "Varnish"]:
+			color = G2
+
+		if ((server == "AkamaiGHost" and status_code == 400) or
+				(server == "Varnish" and status_code == 500) or
+				(sni == "True")):
 			color = G1
 			if self.mode == "direct":
 				whitelist_request = "*"

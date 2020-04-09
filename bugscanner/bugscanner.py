@@ -1,3 +1,4 @@
+import os
 import re
 import sys
 import ssl
@@ -33,9 +34,35 @@ def log_replace(value):
 
 class BugScanner:
 	brainfuck_config = {
+		"ProxyRotator": {
+			"Port": "3080",
+		},
 		"Inject": {
-			"Rules": {}
-		}
+			"Type": 2,
+			"Port": "8989",
+			"Rules": {
+
+			},
+			"Payload": "",
+			"Timeout": 5,
+			"ServerNameIndication": "twitter.com",
+			"ShowLog": False,
+		},
+		"PsiphonCore": 4,
+		"Psiphon": {
+			"CoreName": "psiphon-tunnel-core",
+			"Tunnel": 1,
+			"Region": "",
+			"Protocols": [
+				"FRONTED-MEEK-HTTP-OSSH",
+				"FRONTED-MEEK-OSSH",
+			],
+			"TunnelWorkers": 6,
+			"KuotaDataLimit": 4,
+			"Authorizations": [
+				"",
+			],
+		},
 	}
 	scanned = {
 		"direct": {},
@@ -206,6 +233,8 @@ class BugScanner:
 		self.queue_hostname.join()
 
 		if self.mode == "direct":
+			if os.name == "nt":
+				self.brainfuck_config["Psiphon"]["CoreName"] += ".exe"
 			with open(f"config.bugscanner.{datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}.json", 'w', encoding='utf-8') as f:
 				dump = json.dumps(self.brainfuck_config, indent=4, ensure_ascii=False)
 				data = re.sub('\n +', lambda match: '\n' + '\t' * int((len(match.group().strip('\n')) / 4)), dump)

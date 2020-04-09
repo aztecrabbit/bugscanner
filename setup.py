@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
 	name="bugscanner",
-	version="0.1.0",
+	version="0.1.1",
 	author="aztecrabbit",
 	author_email="ars.xda@gmail.com",
 	description="Bug Scanner for Internet Freedom (Domain Fronting, Server Name Indication, Etc)",

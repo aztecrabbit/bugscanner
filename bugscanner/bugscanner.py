@@ -38,6 +38,7 @@ class BugScanner:
 			"Port": "3080",
 		},
 		"Inject": {
+			"Enable", True,
 			"Type": 2,
 			"Port": "8989",
 			"Rules": {
@@ -138,7 +139,7 @@ class BugScanner:
 		server_name_indication = ".".join(hostname.split(".")[0 - deep:])
 		if server_name_indication in self.scanned["ssl"]:
 			return None
-		
+
 		with lock:
 			self.scanned["ssl"][server_name_indication] = None
 

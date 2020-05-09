@@ -38,7 +38,7 @@ class BugScanner:
 			"Port": "3080",
 		},
 		"Inject": {
-			"Enable", True,
+			"Enable": True,
 			"Type": 2,
 			"Port": "8989",
 			"Rules": {

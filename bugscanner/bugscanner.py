@@ -2,7 +2,6 @@ import os
 import re
 import sys
 import ssl
-import time
 import json
 import queue
 import socket
@@ -45,8 +44,9 @@ class BugScanner:
 
 			},
 			"Payload": "",
-			"Timeout": 5,
+			"MeekType": 0,
 			"ServerNameIndication": "twitter.com",
+			"Timeout": 5,
 			"ShowLog": False,
 		},
 		"PsiphonCore": 4,
@@ -71,33 +71,6 @@ class BugScanner:
 		"proxy": {},
 	}
 
-	def print_result(self, host, hostname, port=None, status_code=None, server=None, sni=None, color=""):
-		if server in ["AkamaiGHost", "AkamaiNetStorage", "Varnish"] or sni == "True":
-			color = G1
-			if self.mode == "direct":
-				whitelist_request = "*"
-				if server in ["AkamaiGHost", "AkamaiNetStorage"]:
-					whitelist_request = "akamai.net"
-				elif server == "Varnish":
-					whitelist_request = "fastly.net"
-				if f"{whitelist_request}:{port}" not in self.brainfuck_config["Inject"]["Rules"]:
-					self.brainfuck_config["Inject"]["Rules"][f"{whitelist_request}:{port}"] = []
-
-				self.brainfuck_config["Inject"]["Rules"][f"{whitelist_request}:{port}"].append(f"{hostname}:{port}")
-
-		if ((server == "AkamaiGHost" and status_code != 400) or
-				(server == "Varnish" and status_code != 500) or
-				(server == "AkamaiNetStorage")):
-			color = G2
-
-		host = f"{host:<15}"
-		hostname = f"  {hostname}"
-		sni = f"  {sni:<4}" if sni is not None else ""
-		server = f"  {server:<20}" if server is not None else ""
-		status_code = f"  {status_code:<4}" if status_code is not None else ""
-
-		log(f"{color}{host}{status_code}{server}{sni}{hostname}")
-
 	def request(self, method, hostname, port, *args, **kwargs):
 		try:
 			url = ("https" if port == 443 else "http") + "://" + (hostname if port == 443 else f"{hostname}:{port}")
@@ -117,8 +90,8 @@ class BugScanner:
 
 		yield host_list[-1], cname
 
-	def get_direct_response(self, method, host, hostname, port):
-		if hostname in self.scanned["direct"]:
+	def get_direct_response(self, method, hostname, port):
+		if f"{hostname}:{port}" in self.scanned["direct"]:
 			return None
 
 		response = self.request(method.upper(), hostname, port, timeout=5, allow_redirects=False)
@@ -129,11 +102,11 @@ class BugScanner:
 			status_code = ""
 			server = ""
 
-		self.scanned["direct"][hostname] = {
+		self.scanned["direct"][f"{hostname}:{port}"] = {
 			"status_code": status_code,
 			"server": server,
 		}
-		return self.scanned["direct"][hostname]
+		return self.scanned["direct"][f"{hostname}:{port}"]
 
 	def get_sni_response(self, hostname, deep):
 		server_name_indication = ".".join(hostname.split(".")[0 - deep:])
@@ -166,7 +139,7 @@ class BugScanner:
 			return self.scanned["ssl"][server_name_indication]
 
 	def get_proxy_response(self, method, hostname, port, proxy):
-		if hostname in self.scanned["proxy"]:
+		if f"{hostname}:{port}" in self.scanned["proxy"]:
 			return None
 
 		response = self.request(method.upper(), hostname, port, proxies={"http": "http://" + proxy, "https": "http://" + proxy}, timeout=5, allow_redirects=False)
@@ -177,16 +150,43 @@ class BugScanner:
 			log(f"{self.proxy} -> {self.method} {response.url} ({response.status_code})")
 			return None
 
-		self.scanned["proxy"][hostname] = {
+		self.scanned["proxy"][f"{hostname}:{port}"] = {
 			"proxy": self.proxy,
 			"method": self.method,
 			"url": response.url,
 			"status_code": response.status_code,
 			"headers": response.headers,
 		}
-		return self.scanned["proxy"][hostname]
+		return self.scanned["proxy"][f"{hostname}:{port}"]
 
-	def print_proxy_response(self, response):
+	def print_result(self, host, hostname, port=None, status_code=None, server=None, sni=None, color=""):
+		if server in ["AkamaiGHost", "AkamaiNetStorage", "Varnish"] or sni == "True":
+			color = G1
+			if self.mode == "direct":
+				whitelist_request = "*"
+				if server in ["AkamaiGHost", "AkamaiNetStorage"]:
+					whitelist_request = "akamai.net"
+				elif server == "Varnish":
+					whitelist_request = "fastly.net"
+				if f"{whitelist_request}:{port}" not in self.brainfuck_config["Inject"]["Rules"]:
+					self.brainfuck_config["Inject"]["Rules"][f"{whitelist_request}:{port}"] = []
+
+				self.brainfuck_config["Inject"]["Rules"][f"{whitelist_request}:{port}"].append(f"{hostname}:{port}")
+
+		if ((server == "AkamaiGHost" and status_code != 400) or
+				(server == "Varnish" and status_code != 500) or
+				(server == "AkamaiNetStorage")):
+			color = G2
+
+		host = f"{host:<15}"
+		hostname = f"  {hostname}"
+		sni = f"  {sni:<4}" if sni is not None else ""
+		server = f"  {server:<20}" if server is not None else ""
+		status_code = f"  {status_code:<4}" if status_code is not None else ""
+
+		log(f"{color}{host}{status_code}{server}{sni}{hostname}")
+
+	def print_result_proxy(self, response):
 		if response is None:
 			return
 
@@ -202,19 +202,20 @@ class BugScanner:
 		while True:
 			for host, hostname in self.resolve(self.queue_hostname.get()):
 				if self.mode == "direct":
-					response = self.get_direct_response(self.method, host, hostname, self.port)
-					if response is not None:
-						self.print_result(host, hostname, port=self.port, status_code=response["status_code"], server=response["server"])
+					response = self.get_direct_response(self.method, hostname, self.port)
+					if response is None:
+						continue
+					self.print_result(host, hostname, port=self.port, status_code=response["status_code"], server=response["server"])
 
 				elif self.mode == "ssl":
 					response = self.get_sni_response(hostname, self.deep)
-					if response is not None:
-						self.print_result(host, response["server_name_indication"], sni=response["status"])
+					if response is None:
+						continue
+					self.print_result(host, response["server_name_indication"], sni=response["status"])
 
 				elif self.mode == "proxy":
 					response = self.get_proxy_response(self.method, hostname, self.port, self.proxy)
-					if response is not None:
-						self.print_proxy_response(response)
+					self.print_result_proxy(response)
 
 			self.queue_hostname.task_done()
 
@@ -237,10 +238,10 @@ class BugScanner:
 
 		self.queue_hostname.join()
 
-		if self.mode == "direct" and len(self.brainfuck_config["Inject"]["Rules"]):
+		if self.output is not None and self.mode == "direct" and len(self.brainfuck_config["Inject"]["Rules"]):
 			if os.name == "nt":
 				self.brainfuck_config["Psiphon"]["CoreName"] += ".exe"
-			with open(f"config.{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}.json", 'w', encoding='utf-8') as f:
+			with open(f"config.{self.output}.json", 'w', encoding='utf-8') as f:
 				dump = json.dumps(self.brainfuck_config, indent=4, ensure_ascii=False)
 				data = re.sub('\n +', lambda match: '\n' + '\t' * int((len(match.group().strip('\n')) / 4)), dump)
 				f.write(data)
@@ -249,14 +250,15 @@ def main():
 	parser = argparse.ArgumentParser(
 		formatter_class=lambda prog: argparse.HelpFormatter(prog, max_help_position=52))
 	parser.add_argument("filename", help="filename", type=str)
-	parser.add_argument("-m", "--mode", help="direct, proxy, ssl", dest="mode", type=str, default="direct")
 	parser.add_argument("-d", "--deep", help="subdomain deep", dest="deep", type=int, default=2)
+	parser.add_argument("-m", "--mode", help="direct, proxy, ssl", dest="mode", type=str, default="direct")
+	parser.add_argument("-o", "--output", help="output file name", dest="output", type=str)
 	parser.add_argument("-p", "--port", help="target port", dest="port", type=int, default=80)
 	parser.add_argument("-t", "--threads", help="threads", dest="threads", type=int, default=8)
 
-	parser.add_argument("-P", "--proxy", help="proxy.example.com:8080", dest="proxy", type=str)
-	parser.add_argument("-M", "--method", help="http method", dest="method", type=str, default="HEAD")
 	parser.add_argument("-I", "--ignore-redirect-location", help="ignore redirect location for --mode proxy", dest="ignore_redirect_location", type=str, default="")
+	parser.add_argument("-M", "--method", help="http method", dest="method", type=str, default="HEAD")
+	parser.add_argument("-P", "--proxy", help="proxy.example.com:8080", dest="proxy", type=str)
 
 	args = parser.parse_args()
 	if args.mode == "proxy" and not args.proxy:
@@ -264,13 +266,14 @@ def main():
 		return
 
 	bugscanner = BugScanner()
-	bugscanner.mode = args.mode
 	bugscanner.deep = args.deep
+	bugscanner.ignore_redirect_location = args.ignore_redirect_location
+	bugscanner.method = args.method.upper()
+	bugscanner.mode = args.mode
+	bugscanner.output = args.output
 	bugscanner.port = args.port
 	bugscanner.proxy = args.proxy
-	bugscanner.method = args.method.upper()
 	bugscanner.threads = args.threads
-	bugscanner.ignore_redirect_location = args.ignore_redirect_location
 	bugscanner.start(open(args.filename).read().splitlines())
 
 if __name__ == "__main__":

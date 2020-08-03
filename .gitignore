@@ -3,14 +3,9 @@
 *.json
 *.stackdump
 
-authorizations.txt
-src/*/
-storage/*/*
+bugscanner/*.txt
 
 !.gitkeep
-!storage/proxifier/*
-!storage/psiphon/.database
-!storage/psiphon/.tunnel-core
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

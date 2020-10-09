@@ -3,6 +3,7 @@ import sys
 
 from .direct_scanner import DirectScanner
 from .proxy_scanner import ProxyScanner
+from .udp_scanner import UdpScanner
 
 
 def get_arguments():
@@ -77,14 +78,19 @@ def main():
 	threads = arguments.threads
 
 	if mode == 'direct':
-		scanner = DirectScanner(threads=threads)
+		scanner = DirectScanner()
 
 	elif mode == 'proxy':
 		if not proxy or len(proxy) != 2:
 			sys.exit('--proxy host:port')
 
-		scanner = ProxyScanner(threads=threads)
+		scanner = ProxyScanner()
 		scanner.proxy = proxy
+
+	elif mode == 'udp':
+		scanner = UdpScanner()
+		scanner.udp_server_host = 'udp.server.com'
+		scanner.udp_server_port = '80'
 
 	else:
 		sys.exit('Not Available!')
@@ -92,6 +98,7 @@ def main():
 	scanner.method_list = method_list
 	scanner.host_list = host_list
 	scanner.port_list = port_list
+	scanner.threads = threads
 	scanner.start()
 
 

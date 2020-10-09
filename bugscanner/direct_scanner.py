@@ -46,6 +46,8 @@ class DirectScanner(BugScanner):
 					}
 
 	def init(self):
+		super().init()
+
 		self.log_info(method='method', status_code='code', server='server', port='port', host='host')
 		self.log_info(method='------', status_code='----', server='------', port='----', host='----')
 

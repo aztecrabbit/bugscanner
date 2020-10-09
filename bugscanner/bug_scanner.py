@@ -2,8 +2,7 @@ import multithreading
 
 
 class BugScanner(multithreading.MultiThreadRequest):
-	def __init__(self, threads=None):
-		super().__init__(threads=threads)
+	threads: int
 
 	def request_connection_error(self, *args, **kwargs):
 		return 1
@@ -22,6 +21,9 @@ class BugScanner(multithreading.MultiThreadRequest):
 		protocol = 'https' if port == '443' else 'http'
 
 		return f'{protocol}://{self.convert_host_port(host, port)}' + (f'/{uri}' if uri is not None else '')
+
+	def init(self):
+		self._threads = self.threads or self._threads
 
 	def complete(self):
 		pass

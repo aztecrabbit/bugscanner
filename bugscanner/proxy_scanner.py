@@ -1,19 +1,16 @@
-from .cdn_scanner import CdnScanner
+from .direct_scanner import DirectScanner
 
 
-class ProxyScanner(CdnScanner):
-	def __init__(self, task_list, proxy, port_list=None, method_list=None, threads=None):
-		super().__init__(task_list, port_list=port_list, method_list=method_list, threads=threads)
-		self.proxy_host = str(proxy[0])
-		self.proxy_port = int(proxy[1])
+class ProxyScanner(DirectScanner):
+	proxy = []
 
 	def log_replace(self, *args):
-		super().log_replace(f'{self.proxy_host}:{self.proxy_port}', *args)
+		super().log_replace(':'.join(self.proxy), *args)
 
 	def request(self, *args, **kwargs):
 		proxies = {
-			'http': self.get_url(self.proxy_host, self.proxy_port),
-			'https': self.get_url(self.proxy_host, self.proxy_port),
+			'http': self.get_url(*self.proxy),
+			'https': self.get_url(*self.proxy),
 		}
 
-		super().request(*args, proxies=proxies, **kwargs)
+		return super().request(*args, proxies=proxies, **kwargs)

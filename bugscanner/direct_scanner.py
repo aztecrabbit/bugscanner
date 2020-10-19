@@ -59,6 +59,7 @@ class DirectScanner(BugScanner):
 		response = self.request(method, self.get_url(host, port), retry=1, timeout=3, allow_redirects=False)
 
 		G1 = self.logger.special_chars['G1']
+		G2 = self.logger.special_chars['G2']
 
 		data = {
 			'method': method,
@@ -72,12 +73,18 @@ class DirectScanner(BugScanner):
 			server = response.headers.get('server', '')
 			location = response.headers.get('location', '')
 
-			if server in ['AkamaiGHost', 'AkamaiNetStorage']:
-				color = G1
+			if server in ['AkamaiGHost']:
+				if status_code == 400:
+					color = G1
+				else:
+					color = G2
 
 			elif server in ['Varnish']:
 				if status_code == 500:
 					color = G1
+
+			elif server in ['AkamaiNetStorage']:
+				color = G2
 
 			data_success = {
 				'color': color,

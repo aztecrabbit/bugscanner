@@ -72,7 +72,7 @@ class DirectScanner(BugScanner):
 			server = response.headers.get('server', '')
 			location = response.headers.get('location', '')
 
-			if server in ['AkamaiGHost']:
+			if server in ['AkamaiGHost', 'AkamaiNetStorage']:
 				color = G1
 
 			data_success = {

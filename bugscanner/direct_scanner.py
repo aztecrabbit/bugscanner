@@ -56,22 +56,34 @@ class DirectScanner(BugScanner):
 		host = payload['host']
 		port = payload['port']
 
+		response = self.request(method, self.get_url(host, port), retry=1, timeout=3, allow_redirects=False)
+
+		G1 = self.logger.special_chars['G1']
+
 		data = {
 			'method': method,
 			'host': host,
 			'port': port,
 		}
 
-		response = self.request(method, self.get_url(host, port), retry=1, timeout=3, allow_redirects=False)
-
 		if response is not None:
-			data = self.dict_merge(
-				data, {
-					'status_code': response.status_code,
-					'server': response.headers.get('server', ''),
-					'location': response.headers.get('location', ''),
-				}
-			)
+			color = ''
+			status_code = response.status_code
+			server = response.headers.get('server', '')
+			location = response.headers.get('location', '')
+
+			if server in ['AkamaiGHost']:
+				color = G1
+
+			data_success = {
+				'color': color,
+				'status_code': status_code,
+				'server': server,
+				'location': location,
+			}
+
+			data = self.dict_merge(data, data_success)
+
 			self.task_success(data)
 
 		self.log_info(**data)

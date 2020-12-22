@@ -48,7 +48,7 @@ class DirectScanner(BugScanner):
 	def init(self):
 		super().init()
 
-		self.log_info(method='method', status_code='code', server='server', port='port', host='host')
+		self.log_info(method='Method', status_code='Code', server='Server', port='Port', host='Host')
 		self.log_info(method='------', status_code='----', server='------', port='----', host='----')
 
 	def task(self, payload):
